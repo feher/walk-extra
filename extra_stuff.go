@@ -33,15 +33,17 @@ type appConfig struct {
 }
 
 type keysConfig struct {
-	ForceQuit *string `json:"forceQuit,omitempty"`
-	Quit      *string `json:"quit,omitempty"`
-	QuitQ     *string `json:"quitQ,omitempty"`
-	UpDir     *string `json:"upDir,omitempty"`
-	OpenDir   *string `json:"openDir,omitempty"`
-	OpenTree  *string `json:"openTree,omitempty"`
-	CloseTree *string `json:"closeTree,omitempty"`
-	Back      *string `json:"back,omitempty"`
-	Select    *string `json:"select,omitempty"`
+	ForceQuit      *string `json:"forceQuit,omitempty"`
+	Quit           *string `json:"quit,omitempty"`
+	QuitQ          *string `json:"quitQ,omitempty"`
+	UpDir          *string `json:"upDir,omitempty"`
+	OpenDir        *string `json:"openDir,omitempty"`
+	OpenTree       *string `json:"openTree,omitempty"`
+	CloseTree      *string `json:"closeTree,omitempty"`
+	Back           *string `json:"back,omitempty"`
+	Select         *string `json:"select,omitempty"`
+	CustomCommands *string `json:"customCommands,omitempty"`
+	DirHotlist     *string `json:"dirHotlist,omitempty"`
 }
 
 type colorsConfig struct {
@@ -113,6 +115,8 @@ type cmdMenuAcceptedMsg struct{}
 type extraModel struct {
 	customCommandsMenu table.Model // Menu of custom commands.
 
+	dirHotlist dirHotlist
+
 	textInput    textinput.Model // For asking text input from the user.
 	textInputCmd *customCommand  // A command that's waiting for the text input.
 
@@ -130,6 +134,8 @@ var (
 
 	keyEnter = key.NewBinding(key.WithKeys("enter"))
 	keyEsc   = key.NewBinding(key.WithKeys("esc"))
+	keyA     = key.NewBinding(key.WithKeys("a"))
+	keyD     = key.NewBinding(key.WithKeys("d"))
 
 	keyUpDir     = key.NewBinding(key.WithKeys("ctrl+left"))
 	keyOpenDir   = key.NewBinding(key.WithKeys("ctrl+right"))
@@ -153,7 +159,6 @@ var (
 	symlinkMark     = "@"
 	exeMark         = "*"
 	treeIndent      = "    "
-	moveWrapsAround = false
 )
 
 func initExtra(m *model) {
@@ -164,6 +169,9 @@ func initExtra(m *model) {
 	initLogToFile()
 
 	config = readConfig()
+
+	// Directory hotlist
+	m.extra.dirHotlist.init(&config)
 
 	// Keys
 	if config.Keys != nil {
@@ -496,6 +504,11 @@ func executeCustomCommand(m *model, customCommand *customCommand) (tea.Cmd, bool
 }
 
 func enterDirectory(m *model, dirPath string) {
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		log.Println("Cannot enter directory: ", dirPath)
+		return
+	}
+
 	isEnteringDirectSubDir := m.path == path.Dir(dirPath)
 
 	// Enter subdirectory.
@@ -582,6 +595,10 @@ func keyMsgHandler(m *model, msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 
+	if cmd, handled := m.extra.dirHotlist.keyMsgHandler(msg); handled {
+		return cmd, true
+	}
+
 	for _, customCommand := range customCommands {
 		if key.Matches(msg, customCommand.key) {
 			if cmd, handled := executeCustomCommand(m, &customCommand); handled {
@@ -609,6 +626,8 @@ func extraView(m *model, view string) string {
 		view = overlay.PlaceOverlay(5, 1, dialogStyle.Render(m.extra.customCommandsMenu.View()), view)
 	}
 
+	view = m.extra.dirHotlist.view(view)
+
 	return view
 }
 
@@ -618,6 +637,10 @@ func extraUpdate(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	if mm, cmd, handled := updateCmdMenu(m, msg); handled {
+		return mm, cmd, handled
+	}
+
+	if mm, cmd, handled := m.extra.dirHotlist.update(m, msg); handled {
 		return mm, cmd, handled
 	}
 
