@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antonmedv/walk/overlay"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -33,36 +30,10 @@ type fileEntry struct {
 	isSelected bool
 }
 
-const (
-	argTypeCurrentDir            int = 0
-	argTypeCurrentFile           int = 1
-	argTypeSelectedFiles         int = 2
-	argTypeSelectedOrCurrentFile int = 3
-	argTypeInput                 int = 4
-)
-
-type customCommand struct {
-	description      string
-	key              key.Binding
-	cmd              string
-	prompt           string
-	completedMessage string
-	argType          int
-}
-
-type askInputForCommandMsg struct{}
-type textInputAcceptedMsg struct{}
-type cmdMenuAcceptedMsg struct{}
-
 type extraModel struct {
-	customCommandsMenu table.Model // Menu of custom commands.
+	customCommands customCommands
 
 	dirHotlist dirHotlist
-
-	textInput    textinput.Model // For asking text input from the user.
-	textInputCmd *customCommand  // A command that's waiting for the text input.
-
-	statusMessage string // A status message that's shown at the bottom.
 
 	maxDislayNameLength int // The longest display name in the file list.
 
@@ -82,11 +53,8 @@ var (
 	keyUpDir     = key.NewBinding(key.WithKeys("ctrl+left"))
 	keyOpenDir   = key.NewBinding(key.WithKeys("ctrl+right"))
 	keySelect    = key.NewBinding(key.WithKeys("insert"))
-	keyCmdMenu   = key.NewBinding(key.WithKeys("f2"))
 	keyOpenTree  key.Binding
 	keyCloseTree key.Binding
-
-	customCommands []customCommand
 
 	directoryStyle = lipgloss.NewStyle().Background(lipgloss.NoColor{}).Foreground(lipgloss.NoColor{})
 	selectedStyle  = lipgloss.NewStyle().Background(lipgloss.NoColor{}).Foreground(lipgloss.NoColor{})
@@ -111,6 +79,9 @@ func initExtra(m *model) {
 	initLogToFile()
 
 	config = readConfig()
+
+	// Custom commands
+	m.extra.customCommands.init(&config)
 
 	// Directory hotlist
 	m.extra.dirHotlist.init(&config)
@@ -180,74 +151,6 @@ func initExtra(m *model) {
 			separator = " " + (*config.Layout.ColumnSeparator)[0:1] + "  "
 		}
 	}
-
-	// Custom commands
-	initCustomCommands(m, &config)
-
-	// Text input
-	ti := textinput.New()
-	ti.CharLimit = 156
-	ti.Width = 40
-	m.extra.textInput = ti
-}
-
-func initCustomCommands(m *model, config *appConfig) {
-
-	menuRows := []table.Row{}
-
-	if config.CustomCommands != nil {
-		for _, c := range *config.CustomCommands {
-			menuRow := []string{}
-			menuRow = append(menuRow, c.Description)
-			menuRow = append(menuRow, "") // key
-
-			var customCommand customCommand
-			customCommand.description = c.Description
-			if len(c.Key) != 0 {
-				menuRow[1] = c.Key
-				customCommand.key = key.NewBinding(key.WithKeys(c.Key))
-			}
-			customCommand.cmd = c.Command
-			customCommand.prompt = c.Prompt
-			customCommand.completedMessage = c.CompletedMessage
-			switch c.Args {
-			case "currentDir":
-				customCommand.argType = argTypeCurrentDir
-			case "currentFile":
-				customCommand.argType = argTypeCurrentFile
-			case "selectedFiles":
-				customCommand.argType = argTypeSelectedFiles
-			case "selectedOrCurrentFile":
-				customCommand.argType = argTypeSelectedOrCurrentFile
-			case "input":
-				customCommand.argType = argTypeInput
-			default:
-				log.Println("Invalid command args: ", c.Args)
-			}
-
-			customCommands = append(customCommands, customCommand)
-			menuRows = append(menuRows, menuRow)
-		}
-	}
-
-	menuColumns := []table.Column{
-		{Title: "Command", Width: 20},
-		{Title: "Key", Width: 20},
-	}
-	cmdMenu := table.New(
-		table.WithColumns(menuColumns),
-		table.WithRows(menuRows),
-		table.WithHeight(7),
-	)
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = cursor
-	cmdMenu.SetStyles(s)
-
-	m.extra.customCommandsMenu = cmdMenu
 }
 
 func ensureDirExists(dirPath string) error {
@@ -290,126 +193,6 @@ func initStyleFromConfig(style *lipgloss.Style, colorConfig *colorConfig) {
 	if colorConfig.Background != nil {
 		*style = (*style).Background(lipgloss.Color(*colorConfig.Background))
 	}
-}
-
-func executeCommand(m *model, command *customCommand, filePaths ...string) tea.Cmd {
-	commandSlice := append(strings.Split(command.cmd, " "), filePaths...)
-	execCmd := exec.Command(commandSlice[0], commandSlice[1:]...)
-	return tea.ExecProcess(execCmd, func(err error) tea.Msg {
-		// Note: we could return a message here indicating that editing is
-		// finished and altering our application about any errors. For now,
-		// however, that's not necessary.
-
-		if len(command.completedMessage) > 0 {
-			m.extra.statusMessage = command.completedMessage
-		}
-
-		// Refresh the list. Files may have been created/deleted.
-		m.list()
-
-		return nil
-	})
-}
-
-func updateTextInput(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if !m.extra.textInput.Focused() {
-		return m, nil, false
-	}
-
-	// Handle keyboard input.
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if key.Matches(msg, keyEsc) {
-			m.extra.textInput.Blur()
-			return m, nil, true
-		} else if key.Matches(msg, keyEnter) {
-			m.extra.textInput.Blur()
-			return m, func() tea.Msg { return textInputAcceptedMsg{} }, true
-		}
-	}
-
-	var cmd tea.Cmd
-	m.extra.textInput, cmd = m.extra.textInput.Update(msg)
-	return m, cmd, true
-}
-
-func updateCmdMenu(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if !m.extra.customCommandsMenu.Focused() {
-		return m, nil, false
-	}
-
-	// Handle keyboard input.
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if key.Matches(msg, keyEsc) {
-			m.extra.customCommandsMenu.Blur()
-			return m, nil, true
-		} else if key.Matches(msg, keyEnter) {
-			m.extra.customCommandsMenu.Blur()
-			return m, func() tea.Msg { return cmdMenuAcceptedMsg{} }, true
-		}
-	}
-
-	var cmd tea.Cmd
-	m.extra.customCommandsMenu, cmd = m.extra.customCommandsMenu.Update(msg)
-	return m, cmd, true
-}
-
-func executeCustomCommand(m *model, customCommand *customCommand) (tea.Cmd, bool) {
-	if customCommand == nil {
-		return nil, false
-	}
-	if customCommand.cmd == "" {
-		return nil, false
-	}
-
-	switch customCommand.argType {
-	case argTypeCurrentDir:
-		{
-			if fileEntry, ok := m.currentFile(); ok {
-				return executeCommand(m, customCommand, fileEntry.dirPath), true
-			} else if len(m.files) == 0 {
-				return executeCommand(m, customCommand, m.path), true
-			} else {
-				return nil, true
-			}
-		}
-	case argTypeCurrentFile:
-		{
-			currentFilePath, ok := m.filePath()
-			if !ok {
-				return nil, true
-			}
-			return executeCommand(m, customCommand, currentFilePath), true
-		}
-	case argTypeSelectedFiles:
-		{
-			selectedFilePaths := getSelectedFilePaths(m)
-			if len(selectedFilePaths) == 0 {
-				return nil, true
-			}
-			return executeCommand(m, customCommand, selectedFilePaths...), true
-		}
-	case argTypeSelectedOrCurrentFile:
-		{
-			selectedFilePaths := getSelectedFilePaths(m)
-			if len(selectedFilePaths) == 0 {
-				currentFilePath, ok := m.filePath()
-				if !ok {
-					return nil, true
-				}
-				selectedFilePaths = append(selectedFilePaths, currentFilePath)
-			}
-			return executeCommand(m, customCommand, selectedFilePaths...), true
-		}
-	case argTypeInput:
-		{
-			m.extra.textInputCmd = customCommand
-			return func() tea.Msg { return askInputForCommandMsg{} }, true
-		}
-	}
-	log.Println("Invalid command arg type: ", customCommand.argType)
-	return nil, false
 }
 
 func enterDirectory(m *model, dirPath string) {
@@ -498,54 +281,25 @@ func keyMsgHandler(m *model, msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 
-	if key.Matches(msg, keyCmdMenu) {
-		m.extra.customCommandsMenu.SetCursor(0)
-		m.extra.customCommandsMenu.Focus()
-		return nil, true
+	if cmd, handled := m.extra.customCommands.keyMsgHandler(m, msg); handled {
+		return cmd, true
 	}
 
 	if cmd, handled := m.extra.dirHotlist.keyMsgHandler(msg); handled {
 		return cmd, true
 	}
 
-	for _, customCommand := range customCommands {
-		if key.Matches(msg, customCommand.key) {
-			if cmd, handled := executeCustomCommand(m, &customCommand); handled {
-				return cmd, true
-			}
-		}
-	}
-
 	return nil, false
 }
 
 func extraView(m *model, view string) string {
-	dialogStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-
-	if m.extra.textInput.Focused() {
-		view = overlay.PlaceOverlay(5, 1, dialogStyle.Render(m.extra.textInput.View()), view)
-		//view += "\n" + m.extra.textInput.View()
-	}
-
-	if len(m.extra.statusMessage) > 0 {
-		view += "\n" + bar.Render(m.extra.statusMessage)
-	}
-
-	if m.extra.customCommandsMenu.Focused() {
-		view = overlay.PlaceOverlay(5, 1, dialogStyle.Render(m.extra.customCommandsMenu.View()), view)
-	}
-
+	view = m.extra.customCommands.view(view)
 	view = m.extra.dirHotlist.view(view)
-
 	return view
 }
 
 func extraUpdate(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if mm, cmd, handled := updateTextInput(m, msg); handled {
-		return mm, cmd, handled
-	}
-
-	if mm, cmd, handled := updateCmdMenu(m, msg); handled {
+	if mm, cmd, handled := m.extra.customCommands.update(m, msg); handled {
 		return mm, cmd, handled
 	}
 
@@ -554,38 +308,7 @@ func extraUpdate(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	switch msg := msg.(type) {
-	case askInputForCommandMsg:
-		if len(m.extra.textInputCmd.prompt) > 0 {
-			m.extra.textInput.Prompt = m.extra.textInputCmd.prompt
-		} else {
-			m.extra.textInput.Prompt = "Enter input: "
-		}
-		m.extra.textInput.SetValue("")
-		m.extra.textInput.Focus()
-		return m, nil, true
-	case textInputAcceptedMsg:
-		{
-			inputText := strings.TrimSpace(m.extra.textInput.Value())
-			if len(inputText) > 0 && m.extra.textInputCmd != nil {
-				if currentFile, ok := m.currentFile(); ok {
-					return m, executeCommand(m, m.extra.textInputCmd, currentFile.dirPath, inputText), true
-				} else if len(m.files) == 0 {
-					return m, executeCommand(m, m.extra.textInputCmd, m.path, inputText), true
-				}
-			}
-			return m, nil, true
-		}
-	case cmdMenuAcceptedMsg:
-		{
-			cmdIndex := m.extra.customCommandsMenu.Cursor()
-			if cmd, handled := executeCustomCommand(m, &customCommands[cmdIndex]); handled {
-				return m, cmd, true
-			}
-		}
 	case tea.KeyMsg:
-		// Clear the status message when any key is pressed.
-		m.extra.statusMessage = ""
-
 		if cmd, handled := keyMsgHandler(m, msg); handled {
 			// KeyMsg got handled.
 			return m, cmd, true

@@ -198,11 +198,9 @@ func (d *dirHotlist) keyMsgHandler(msg tea.KeyMsg) (tea.Cmd, bool) {
 }
 
 func (d *dirHotlist) view(view string) string {
-	dialogStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-
-	if d.menu.Focused() {
-		view = overlay.PlaceOverlay(5, 1, dialogStyle.Render(d.menu.View()), view)
+	if !d.menu.Focused() {
+		return view
 	}
-
-	return view
+	dialogStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder())
+	return overlay.PlaceOverlay(5, 1, dialogStyle.Render(d.menu.View()), view)
 }
