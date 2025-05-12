@@ -531,7 +531,7 @@ func (m *model) View() string {
 	// Location bar (grey).
 	location := m.path
 	if userHomeDir, err := os.UserHomeDir(); err == nil {
-		location = Replace(m.path, userHomeDir, "~", 1)
+		location = Replace(location, userHomeDir, "~", 1)
 	}
 	if runtime.GOOS == "windows" {
 		location = ReplaceAll(Replace(location, "\\/", fileSeparator, 1), "/", fileSeparator)
@@ -576,9 +576,10 @@ func (m *model) View() string {
 			f, ok := m.currentFile()
 			if ok {
 				env := Env{
-					DirPath:     m.path,
-					Files:       nil,
-					CurrentFile: f.dirEntry,
+					DirPath:            m.path,
+					Files:              nil,
+					CurrentFile:        f.dirEntry,
+					CurrentFileDirPath: f.dirPath,
 				}
 				statusBar, err := expr.Run(m.statusBar, env)
 				if err != nil {

@@ -682,11 +682,12 @@ func findFileIndex(filePath string, files []fileEntry) (int, bool) {
 	return -1, false
 }
 
-func executeExprProgram(prog *vm.Program, dirPath string, file os.DirEntry) string {
+func executeExprProgram(prog *vm.Program, dirPath string, fileEntry *fileEntry) string {
 	env := Env{
-		DirPath:     dirPath,
-		Files:       nil,
-		CurrentFile: file,
+		DirPath:            dirPath,
+		CurrentFileDirPath: fileEntry.dirPath,
+		CurrentFile:        fileEntry.dirEntry,
+		Files:              nil,
 	}
 	result := ""
 	output, err := expr.Run(prog, env)
@@ -856,7 +857,7 @@ filter:
 		fileEntry.dirEntry = files[i]
 
 		if m.fileInfoProg != nil {
-			fileEntry.brief = executeExprProgram(m.fileInfoProg, fileEntry.dirPath, fileEntry.dirEntry)
+			fileEntry.brief = executeExprProgram(m.fileInfoProg, m.path, &fileEntry)
 		}
 		if showIcons {
 			info, err := fileEntry.dirEntry.Info()
@@ -907,10 +908,43 @@ filter:
 
 func (e Env) FileName() string {
 	name := e.CurrentFile.Name()
-	target, err := os.Readlink(path.Join(e.DirPath, name))
+	filePath := path.Join(e.CurrentFileDirPath, name)
+	target, err := os.Readlink(filePath)
 	if err == nil {
 		name += " -> " + target
 	}
+	return name
+}
+
+// Show the relative path of the selected file.
+//
+// This is useful when the selected file is in a subdirectory
+// that's open in the treeview. For example:
+//
+//	 dir
+//	     subdir1
+//		        file1
+//
+// If "file1" is selected then we show "dir/subdir/file1" and not just "file1".
+func (e Env) RelFileName() string {
+	name := e.CurrentFile.Name()
+
+	filePath := path.Join(e.CurrentFileDirPath, name)
+
+	if e.DirPath != e.CurrentFileDirPath {
+		if relPath, found := strings.CutPrefix(e.CurrentFileDirPath, e.DirPath); found {
+			name = relPath[1:] + fileSeparator + name
+		} else {
+			// Weird. This file is somewhere unexpected. Display the full path.
+			name = filePath
+		}
+	}
+
+	target, err := os.Readlink(filePath)
+	if err == nil {
+		name += " -> " + target
+	}
+
 	return name
 }
 

@@ -19,9 +19,16 @@ func compile(code string) *vm.Program {
 }
 
 type Env struct {
-	DirPath     string
-	Files       []fs.DirEntry `expr:"files"`
-	CurrentFile fs.DirEntry   `expr:"current_file"`
+	// The path of the current directory (i.e. not the subdirectory in the tree view).
+	DirPath string
+
+	Files []fs.DirEntry `expr:"files"`
+
+	CurrentFile fs.DirEntry `expr:"current_file"`
+
+	// The full path of the current file's directory.
+	// This may be different from DirPath if the current file is in a subdirectory in the tree view.
+	CurrentFileDirPath string
 }
 
 func (e Env) Sprintf(format string, a ...any) string {
