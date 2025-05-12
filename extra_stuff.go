@@ -788,7 +788,9 @@ func calculateColumnCount(maxNameSize int, files []fileEntry, width int, height 
 	// but don't go lower than the third of the available height.
 	//
 	// rows*columns-fileCount = Empty rows in last column.
-	for rows*columns-fileCount > 0 && rows > height/3 {
+	//
+	// We check with rows-1, because we want to ask "what will happen if we decrease the rows by one?".
+	for (rows-1)*columns-fileCount > 0 && (rows-1) > height/3 {
 		rows--
 	}
 
