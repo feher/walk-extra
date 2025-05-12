@@ -227,71 +227,6 @@ func enterDirectory(m *model, dirPath string) {
 	m.list()
 }
 
-// Returns true if the key was handled.
-func keyMsgHandler(m *model, msg tea.KeyMsg) (tea.Cmd, bool) {
-	if key.Matches(msg, keyOpenDir) {
-		filePath, ok := m.filePath()
-		if !ok {
-			return nil, false
-		}
-		if fi := fileInfo(filePath); fi.IsDir() {
-			enterDirectory(m, filePath)
-			return nil, true
-		}
-	}
-
-	if key.Matches(msg, keyOpenTree) {
-		fileEntry, ok := m.currentFile()
-		if !ok {
-			return nil, false
-		}
-		if fileEntry.dirEntry.IsDir() {
-			filePath := path.Join(fileEntry.dirPath, fileEntry.dirEntry.Name())
-			m.extra.openTreeDirs[filePath] = true
-			m.list()
-			return nil, true
-		}
-	}
-
-	if key.Matches(msg, keyCloseTree) {
-		fileEntry, ok := m.currentFile()
-		if !ok {
-			return nil, false
-		}
-		filePath := path.Join(fileEntry.dirPath, fileEntry.dirEntry.Name())
-		if _, isOpen := m.extra.openTreeDirs[filePath]; isOpen {
-			delete(m.extra.openTreeDirs, filePath)
-		} else {
-			// This entry is not open. Maybe it's a file or directory that's not open.
-			// Close the parent dir.
-			parentDirPath := path.Dir(filePath)
-			// The cursor is on a file that will disappear.
-			// After closing, let's put the cursor on the parent dir.
-			m.findPrevName = true
-			m.prevName = parentDirPath
-			delete(m.extra.openTreeDirs, parentDirPath)
-		}
-		m.list()
-		return nil, true
-	}
-
-	if key.Matches(msg, keySelect) {
-		m.files[m.currenFileIndex].isSelected = !m.files[m.currenFileIndex].isSelected
-		m.moveDown()
-		return nil, true
-	}
-
-	if cmd, handled := m.extra.customCommands.keyMsgHandler(m, msg); handled {
-		return cmd, true
-	}
-
-	if cmd, handled := m.extra.dirHotlist.keyMsgHandler(msg); handled {
-		return cmd, true
-	}
-
-	return nil, false
-}
-
 func extraView(m *model, view string) string {
 	view = m.extra.customCommands.view(view)
 	view = m.extra.dirHotlist.view(view)
@@ -299,19 +234,66 @@ func extraView(m *model, view string) string {
 }
 
 func extraUpdate(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if mm, cmd, handled := m.extra.customCommands.update(m, msg); handled {
-		return mm, cmd, handled
+	if cmd, handled := m.extra.customCommands.update(m, msg); handled {
+		return m, cmd, handled
 	}
 
-	if mm, cmd, handled := m.extra.dirHotlist.update(m, msg); handled {
-		return mm, cmd, handled
+	if cmd, handled := m.extra.dirHotlist.update(m, msg); handled {
+		return m, cmd, handled
 	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if cmd, handled := keyMsgHandler(m, msg); handled {
-			// KeyMsg got handled.
-			return m, cmd, true
+		if key.Matches(msg, keyOpenDir) {
+			filePath, ok := m.filePath()
+			if !ok {
+				return m, nil, false
+			}
+			if fi := fileInfo(filePath); fi.IsDir() {
+				enterDirectory(m, filePath)
+				return m, nil, true
+			}
+		}
+
+		if key.Matches(msg, keyOpenTree) {
+			fileEntry, ok := m.currentFile()
+			if !ok {
+				return m, nil, false
+			}
+			if fileEntry.dirEntry.IsDir() {
+				filePath := path.Join(fileEntry.dirPath, fileEntry.dirEntry.Name())
+				m.extra.openTreeDirs[filePath] = true
+				m.list()
+				return m, nil, true
+			}
+		}
+
+		if key.Matches(msg, keyCloseTree) {
+			fileEntry, ok := m.currentFile()
+			if !ok {
+				return m, nil, false
+			}
+			filePath := path.Join(fileEntry.dirPath, fileEntry.dirEntry.Name())
+			if _, isOpen := m.extra.openTreeDirs[filePath]; isOpen {
+				delete(m.extra.openTreeDirs, filePath)
+			} else {
+				// This entry is not open. Maybe it's a file or directory that's not open.
+				// Close the parent dir.
+				parentDirPath := path.Dir(filePath)
+				// The cursor is on a file that will disappear.
+				// After closing, let's put the cursor on the parent dir.
+				m.findPrevName = true
+				m.prevName = parentDirPath
+				delete(m.extra.openTreeDirs, parentDirPath)
+			}
+			m.list()
+			return m, nil, true
+		}
+
+		if key.Matches(msg, keySelect) {
+			m.files[m.currenFileIndex].isSelected = !m.files[m.currenFileIndex].isSelected
+			m.moveDown()
+			return m, nil, true
 		}
 	}
 

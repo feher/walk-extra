@@ -143,57 +143,56 @@ func (d *dirHotlist) writeToJson() {
 	}
 }
 
-func (d *dirHotlist) update(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if !d.menu.Focused() {
-		return m, nil, false
-	}
-
-	// Handle keyboard input.
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if key.Matches(msg, keyEsc) {
-			d.menu.Blur()
-			return m, nil, true
-		} else if key.Matches(msg, keyEnter) {
-			d.menu.Blur()
-			itemIndex := d.menu.Cursor()
-			if 0 <= itemIndex && itemIndex < len(d.items) {
-				enterDirectory(m, d.items[itemIndex].DirPath)
-			}
-			return m, nil, true
-		} else if key.Matches(msg, keyA) {
-			if currentFile, ok := m.currentFile(); ok {
-				d.items = append(d.items, dirHotlistItem{DirPath: currentFile.dirPath})
-			} else {
-				d.items = append(d.items, dirHotlistItem{DirPath: m.path})
-			}
-			d.writeToJson()
-			d.recreateMenu()
-			d.menu.Focus()
-		} else if key.Matches(msg, keyD) {
-			itemIndex := d.menu.Cursor()
-			if 0 <= itemIndex && itemIndex < len(d.items) {
-				d.items = append(d.items[0:itemIndex], d.items[itemIndex+1:]...)
+func (d *dirHotlist) update(m *model, msg tea.Msg) (tea.Cmd, bool) {
+	if d.menu.Focused() {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if key.Matches(msg, keyEsc) {
+				d.menu.Blur()
+				return nil, true
+			} else if key.Matches(msg, keyEnter) {
+				d.menu.Blur()
+				itemIndex := d.menu.Cursor()
+				if 0 <= itemIndex && itemIndex < len(d.items) {
+					enterDirectory(m, d.items[itemIndex].DirPath)
+				}
+				return nil, true
+			} else if key.Matches(msg, keyA) {
+				if currentFile, ok := m.currentFile(); ok {
+					d.items = append(d.items, dirHotlistItem{DirPath: currentFile.dirPath})
+				} else {
+					d.items = append(d.items, dirHotlistItem{DirPath: m.path})
+				}
 				d.writeToJson()
 				d.recreateMenu()
 				d.menu.Focus()
+			} else if key.Matches(msg, keyD) {
+				itemIndex := d.menu.Cursor()
+				if 0 <= itemIndex && itemIndex < len(d.items) {
+					d.items = append(d.items[0:itemIndex], d.items[itemIndex+1:]...)
+					d.writeToJson()
+					d.recreateMenu()
+					d.menu.Focus()
+				}
+			}
+		}
+
+		var cmd tea.Cmd
+		d.menu, cmd = d.menu.Update(msg)
+		return cmd, true
+
+	} else {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if key.Matches(msg, d.keyDirHotlist) {
+				d.recreateMenu()
+				d.menu.SetCursor(0)
+				d.menu.Focus()
+				return nil, true
 			}
 		}
 	}
 
-	var cmd tea.Cmd
-	d.menu, cmd = d.menu.Update(msg)
-	return m, cmd, true
-}
-
-// Returns true if the key was handled.
-func (d *dirHotlist) keyMsgHandler(msg tea.KeyMsg) (tea.Cmd, bool) {
-	if key.Matches(msg, d.keyDirHotlist) {
-		d.recreateMenu()
-		d.menu.SetCursor(0)
-		d.menu.Focus()
-		return nil, true
-	}
 	return nil, false
 }
 

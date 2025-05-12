@@ -193,25 +193,6 @@ func (c *customCommands) executeCustomCommand(m *model, customCommand *customCom
 	return nil, false
 }
 
-// Returns true if the key was handled.
-func (c *customCommands) keyMsgHandler(m *model, msg tea.KeyMsg) (tea.Cmd, bool) {
-	if key.Matches(msg, c.keyCmdMenu) {
-		c.menu.SetCursor(0)
-		c.menu.Focus()
-		return nil, true
-	}
-
-	for _, customCommand := range c.commands {
-		if key.Matches(msg, customCommand.key) {
-			if cmd, handled := c.executeCustomCommand(m, &customCommand); handled {
-				return cmd, true
-			}
-		}
-	}
-
-	return nil, false
-}
-
 func (c *customCommands) view(view string) string {
 	dialogStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder())
 
@@ -231,9 +212,9 @@ func (c *customCommands) view(view string) string {
 	return view
 }
 
-func (c *customCommands) updateCmdMenu(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+func (c *customCommands) updateCmdMenu(msg tea.Msg) (tea.Cmd, bool) {
 	if !c.menu.Focused() {
-		return m, nil, false
+		return nil, false
 	}
 
 	// Handle keyboard input.
@@ -241,21 +222,21 @@ func (c *customCommands) updateCmdMenu(m *model, msg tea.Msg) (tea.Model, tea.Cm
 	case tea.KeyMsg:
 		if key.Matches(msg, keyEsc) {
 			c.menu.Blur()
-			return m, nil, true
+			return nil, true
 		} else if key.Matches(msg, keyEnter) {
 			c.menu.Blur()
-			return m, func() tea.Msg { return cmdMenuAcceptedMsg{} }, true
+			return func() tea.Msg { return cmdMenuAcceptedMsg{} }, true
 		}
 	}
 
 	var cmd tea.Cmd
 	c.menu, cmd = c.menu.Update(msg)
-	return m, cmd, true
+	return cmd, true
 }
 
-func (c *customCommands) updateTextInput(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+func (c *customCommands) updateTextInput(msg tea.Msg) (tea.Cmd, bool) {
 	if !c.textInput.Focused() {
-		return m, nil, false
+		return nil, false
 	}
 
 	// Handle keyboard input.
@@ -263,28 +244,28 @@ func (c *customCommands) updateTextInput(m *model, msg tea.Msg) (tea.Model, tea.
 	case tea.KeyMsg:
 		if key.Matches(msg, keyEsc) {
 			c.textInput.Blur()
-			return m, nil, true
+			return nil, true
 		} else if key.Matches(msg, keyEnter) {
 			c.textInput.Blur()
-			return m, func() tea.Msg { return textInputAcceptedMsg{} }, true
+			return func() tea.Msg { return textInputAcceptedMsg{} }, true
 		}
 	}
 
 	var cmd tea.Cmd
 	c.textInput, cmd = c.textInput.Update(msg)
-	return m, cmd, true
+	return cmd, true
 }
 
-func (c *customCommands) update(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if mm, cmd, handled := c.updateTextInput(m, msg); handled {
-		return mm, cmd, handled
+func (c *customCommands) update(m *model, msg tea.Msg) (tea.Cmd, bool) {
+	if cmd, handled := c.updateTextInput(msg); handled {
+		return cmd, handled
 	}
 
-	if mm, cmd, handled := c.updateCmdMenu(m, msg); handled {
-		return mm, cmd, handled
+	if cmd, handled := c.updateCmdMenu(msg); handled {
+		return cmd, handled
 	}
 
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case askInputForCommandMsg:
 		if len(c.textInputCmd.prompt) > 0 {
 			c.textInput.Prompt = c.textInputCmd.prompt
@@ -293,30 +274,44 @@ func (c *customCommands) update(m *model, msg tea.Msg) (tea.Model, tea.Cmd, bool
 		}
 		c.textInput.SetValue("")
 		c.textInput.Focus()
-		return m, nil, true
+		return nil, true
 	case textInputAcceptedMsg:
 		{
 			inputText := strings.TrimSpace(c.textInput.Value())
 			if len(inputText) > 0 && c.textInputCmd != nil {
 				if currentFile, ok := m.currentFile(); ok {
-					return m, c.executeCommand(m, c.textInputCmd, currentFile.dirPath, inputText), true
+					return c.executeCommand(m, c.textInputCmd, currentFile.dirPath, inputText), true
 				} else if len(m.files) == 0 {
-					return m, c.executeCommand(m, c.textInputCmd, m.path, inputText), true
+					return c.executeCommand(m, c.textInputCmd, m.path, inputText), true
 				}
 			}
-			return m, nil, true
+			return nil, true
 		}
 	case cmdMenuAcceptedMsg:
 		{
 			cmdIndex := c.menu.Cursor()
 			if cmd, handled := c.executeCustomCommand(m, &c.commands[cmdIndex]); handled {
-				return m, cmd, true
+				return cmd, true
 			}
 		}
 	case tea.KeyMsg:
 		// Clear the status message when any key is pressed.
 		c.statusMessage = ""
+
+		if key.Matches(msg, c.keyCmdMenu) {
+			c.menu.SetCursor(0)
+			c.menu.Focus()
+			return nil, true
+		}
+
+		for _, customCommand := range c.commands {
+			if key.Matches(msg, customCommand.key) {
+				if cmd, handled := c.executeCustomCommand(m, &customCommand); handled {
+					return cmd, true
+				}
+			}
+		}
 	}
 
-	return nil, nil, false
+	return nil, false
 }
