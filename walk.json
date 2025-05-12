@@ -8,7 +8,9 @@
         "openTree" : "ctrl+down",
         "closeTree" : "ctrl+up",
         "back" : "backspace",
-        "select" : "insert"
+        "select" : "insert",
+        "customCommands" : "f2",
+        "dirHotlist" : "f9"
     },
     
     "colors" : {
@@ -22,7 +24,7 @@
     },
     
     "layout": {
-        "statusBar" : "[Mode(), Owner(), Size() | PadLeft(7), ModTime2(\"Jan 02 15:04\", \"2006  Jan 02\") | PadLeft(12), FileName()] | join(\" \")",
+        "statusBar" : "[Mode(), Owner(), Size() | PadLeft(7), ModTime2(\"Jan 02 15:04\", \"2006  Jan 02\") | PadLeft(12), RelFileName()] | join(\" \")",
         "fileInfo" : "[Mode(), Owner(), Size() | PadLeft(7), ModTime2(\"Jan 02 15:04\", \"2006  Jan 02\") | PadLeft(12)] | join(\" \")",
         "#maxColumns" : 10,
         "maxColumns" : 1,
