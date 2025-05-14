@@ -197,7 +197,7 @@ func initStyleFromConfig(style *lipgloss.Style, colorConfig *colorConfig) {
 
 func enterDirectory(m *model, dirPath string) {
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		log.Println("Cannot enter directory: ", dirPath)
+		m.extra.customCommands.statusMessage = fmt.Sprint("ERROR: Not found: ", dirPath)
 		return
 	}
 
