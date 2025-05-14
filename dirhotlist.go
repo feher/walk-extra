@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"slices"
 	"sort"
 
 	"github.com/antonmedv/walk/overlay"
@@ -158,14 +159,16 @@ func (d *dirHotlist) update(m *model, msg tea.Msg) (tea.Cmd, bool) {
 				}
 				return nil, true
 			} else if key.Matches(msg, keyA) {
+				dirPath := m.path
 				if currentFile, ok := m.currentFile(); ok {
-					d.items = append(d.items, dirHotlistItem{DirPath: currentFile.dirPath})
-				} else {
-					d.items = append(d.items, dirHotlistItem{DirPath: m.path})
+					dirPath = currentFile.dirPath
 				}
-				d.writeToJson()
-				d.recreateMenu()
-				d.menu.Focus()
+				if index := slices.IndexFunc(d.items, func(item dirHotlistItem) bool { return item.DirPath == dirPath }); index == -1 {
+					d.items = append(d.items, dirHotlistItem{DirPath: dirPath})
+					d.writeToJson()
+					d.recreateMenu()
+					d.menu.Focus()
+				}
 			} else if key.Matches(msg, keyD) {
 				itemIndex := d.menu.Cursor()
 				if 0 <= itemIndex && itemIndex < len(d.items) {
