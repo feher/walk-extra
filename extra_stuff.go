@@ -31,8 +31,6 @@ type fileEntry struct {
 }
 
 type extraModel struct {
-	statusMessage string // A message that is shown in the status bar.
-
 	customCommands customCommands
 
 	dirHotlist dirHotlist
@@ -199,7 +197,7 @@ func initStyleFromConfig(style *lipgloss.Style, colorConfig *colorConfig) {
 
 func enterDirectory(m *model, dirPath string) {
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		m.extra.customCommands.statusMessage = fmt.Sprint("ERROR: Not found: ", dirPath)
+		m.statusMessage = fmt.Sprint("ERROR: Not found: ", dirPath)
 		return
 	}
 

@@ -37,12 +37,11 @@ type textInputAcceptedMsg struct{}
 type cmdMenuAcceptedMsg struct{}
 
 type customCommands struct {
-	commands      []customCommand
-	keyCmdMenu    key.Binding
-	menu          table.Model     // Menu of custom commands.
-	textInput     textinput.Model // For asking text input from the user.
-	textInputCmd  *customCommand  // A command that's waiting for the text input.
-	statusMessage string
+	commands     []customCommand
+	keyCmdMenu   key.Binding
+	menu         table.Model     // Menu of custom commands.
+	textInput    textinput.Model // For asking text input from the user.
+	textInputCmd *customCommand  // A command that's waiting for the text input.
 }
 
 func (c *customCommands) init(config *appConfig) {
@@ -123,9 +122,9 @@ func (c *customCommands) executeCommand(m *model, command *customCommand, filePa
 	execCmd := exec.Command(commandSlice[0], commandSlice[1:]...)
 	return tea.ExecProcess(execCmd, func(err error) tea.Msg {
 		if err != nil {
-			c.statusMessage = fmt.Sprint("ERROR: ", err.Error())
+			m.statusMessage = fmt.Sprint("ERROR: ", err.Error())
 		} else if len(command.completedMessage) > 0 {
-			c.statusMessage = command.completedMessage
+			m.statusMessage = command.completedMessage
 		}
 
 		// Refresh the list. Files may have been created/deleted.
@@ -198,10 +197,6 @@ func (c *customCommands) view(view string) string {
 	if c.textInput.Focused() {
 		view = overlay.PlaceOverlay(5, 1, dialogStyle.Render(c.textInput.View()), view)
 		//view += "\n" + m.extra.textInput.View()
-	}
-
-	if len(c.statusMessage) > 0 {
-		view += "\n" + bar.Render(c.statusMessage)
 	}
 
 	if c.menu.Focused() {
@@ -294,9 +289,6 @@ func (c *customCommands) update(m *model, msg tea.Msg) (tea.Cmd, bool) {
 			}
 		}
 	case tea.KeyMsg:
-		// Clear the status message when any key is pressed.
-		c.statusMessage = ""
-
 		if key.Matches(msg, c.keyCmdMenu) {
 			c.menu.SetCursor(0)
 			c.menu.Focus()

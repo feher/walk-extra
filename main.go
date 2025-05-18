@@ -170,7 +170,7 @@ type model struct {
 	previewContent        string              // Content of preview.
 	deleteCurrentFile     bool                // Whether to delete current file.
 	toBeDeleted           []toDelete          // Map of files to be deleted.
-	yankedFilePath        string              // Show yank info
+	statusMessage         string              // Show a message in the status bar.
 	hideHidden            bool                // Hide hidden files
 	showHelp              bool                // Show help
 	statusBar             *vm.Program         // Status bar program.
@@ -393,7 +393,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			filePath, ok := m.filePath()
 			if ok {
 				clipboard.WriteAll(filePath)
-				m.yankedFilePath = filePath
+				m.statusMessage = fmt.Sprintf("copied: %v", filePath)
 			}
 			return m, nil
 
@@ -409,8 +409,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.deleteCurrentFile = false
 		m.showHelp = false
-		m.yankedFilePath = ""
-		m.extra.statusMessage = ""
+		m.statusMessage = ""
 		m.saveCursorPosition()
 
 	case clearSearchMsg:
@@ -570,11 +569,8 @@ func (m *model) View() string {
 			timeLeft := int(toDelete.at.Sub(time.Now()).Seconds())
 			deleteBar := fmt.Sprintf("%v deleted. (u)ndo %v", path.Base(toDelete.path), timeLeft)
 			main += "\n" + danger.Render(deleteBar)
-		} else if m.yankedFilePath != "" {
-			yankBar := fmt.Sprintf("copied: %v", m.yankedFilePath)
-			main += "\n" + bar.Render(yankBar)
-		} else if m.extra.statusMessage != "" {
-			main += "\n" + bar.Render(fmt.Sprint(m.extra.statusMessage))
+		} else if m.statusMessage != "" {
+			main += "\n" + bar.Render(m.statusMessage)
 		} else if m.statusBar != nil {
 			f, ok := m.currentFile()
 			if ok {
@@ -692,10 +688,7 @@ func (m *model) showStatusBar() bool {
 	if len(m.toBeDeleted) > 0 {
 		return true
 	}
-	if m.yankedFilePath != "" {
-		return true
-	}
-	if m.extra.statusMessage != "" {
+	if m.statusMessage != "" {
 		return true
 	}
 	if m.statusBar != nil {
@@ -753,7 +746,7 @@ func (m *model) open() tea.Cmd {
 	execCmd := exec.Command(commandSlice[0], commandSlice[1:]...)
 	return tea.ExecProcess(execCmd, func(err error) tea.Msg {
 		if err != nil {
-			m.extra.statusMessage = fmt.Sprint("ERROR: ", err.Error())
+			m.statusMessage = fmt.Sprint("ERROR: ", err.Error())
 		}
 		return nil
 	})
