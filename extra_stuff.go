@@ -31,6 +31,8 @@ type fileEntry struct {
 }
 
 type extraModel struct {
+	statusMessage string // A message that is shown in the status bar.
+
 	customCommands customCommands
 
 	dirHotlist dirHotlist
@@ -391,7 +393,19 @@ func createDisplayName(fileEntry *fileEntry, withPadding bool, withStyle bool, f
 	return displayName
 }
 
-func generateFilePreview(filePath string) (string, bool) {
+func extraFilePreview(filePath string) (string, bool) {
+	if config.PreviewCommand == nil {
+		return "", false
+	}
+	commandSlice := append(strings.Split(*config.PreviewCommand, " "), filePath)
+	out, err := exec.Command(commandSlice[0], commandSlice[1:]...).Output()
+	if err != nil {
+		return "", false
+	}
+	return string(out), true
+}
+
+func generateHexFilePreview(filePath string) (string, bool) {
 	out, err := exec.Command("xxd", "-l", "102400", filePath).Output()
 	if err != nil {
 		return "", false

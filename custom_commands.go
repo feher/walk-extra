@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -121,11 +122,9 @@ func (c *customCommands) executeCommand(m *model, command *customCommand, filePa
 	commandSlice := append(strings.Split(command.cmd, " "), filePaths...)
 	execCmd := exec.Command(commandSlice[0], commandSlice[1:]...)
 	return tea.ExecProcess(execCmd, func(err error) tea.Msg {
-		// Note: we could return a message here indicating that editing is
-		// finished and altering our application about any errors. For now,
-		// however, that's not necessary.
-
-		if len(command.completedMessage) > 0 {
+		if err != nil {
+			c.statusMessage = fmt.Sprint("ERROR: ", err.Error())
+		} else if len(command.completedMessage) > 0 {
 			c.statusMessage = command.completedMessage
 		}
 

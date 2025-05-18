@@ -12,7 +12,8 @@ type appConfig struct {
 	Keys           *keysConfig            `json:"keys,omitempty"`
 	Colors         *colorsConfig          `json:"colors,omitempty"`
 	Layout         *layoutConfig          `json:"layout,omitempty"`
-	Editor         *string                `json:"editor,omitempty"`
+	OpenCommand    *string                `json:"openFileCmd,omitempty"`
+	PreviewCommand *string                `json:"previewFileCmd,omitempty"`
 	CustomCommands *[]customCommandConfig `json:"customCommands,omitempty"`
 }
 

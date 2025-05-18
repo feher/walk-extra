@@ -410,6 +410,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.deleteCurrentFile = false
 		m.showHelp = false
 		m.yankedFilePath = ""
+		m.extra.statusMessage = ""
 		m.saveCursorPosition()
 
 	case clearSearchMsg:
@@ -572,6 +573,8 @@ func (m *model) View() string {
 		} else if m.yankedFilePath != "" {
 			yankBar := fmt.Sprintf("copied: %v", m.yankedFilePath)
 			main += "\n" + bar.Render(yankBar)
+		} else if m.extra.statusMessage != "" {
+			main += "\n" + bar.Render(fmt.Sprint(m.extra.statusMessage))
 		} else if m.statusBar != nil {
 			f, ok := m.currentFile()
 			if ok {
@@ -692,6 +695,9 @@ func (m *model) showStatusBar() bool {
 	if m.yankedFilePath != "" {
 		return true
 	}
+	if m.extra.statusMessage != "" {
+		return true
+	}
 	if m.statusBar != nil {
 		return true
 	}
@@ -736,7 +742,9 @@ func (m *model) open() tea.Cmd {
 	}
 
 	var commandString string
-	if commandString, ok = openWith[extension(filePath)]; ok {
+	if config.OpenCommand != nil {
+		commandString = *config.OpenCommand
+	} else if commandString, ok = openWith[extension(filePath)]; ok {
 	} else {
 		commandString = lookup([]string{"WALK_EDITOR", "EDITOR"}, "less")
 	}
@@ -744,9 +752,9 @@ func (m *model) open() tea.Cmd {
 	commandSlice := append(Split(commandString, " "), filePath)
 	execCmd := exec.Command(commandSlice[0], commandSlice[1:]...)
 	return tea.ExecProcess(execCmd, func(err error) tea.Msg {
-		// Note: we could return a message here indicating that editing is
-		// finished and altering our application about any errors. For now,
-		// however, that's not necessary.
+		if err != nil {
+			m.extra.statusMessage = fmt.Sprint("ERROR: ", err.Error())
+		}
 		return nil
 	})
 }
@@ -800,6 +808,10 @@ func (m *model) preview() {
 		return
 	}
 
+	if m.previewContent, ok = extraFilePreview(filePath); ok {
+		return
+	}
+
 	if isImage(filePath) {
 		img, err := drawImage(filePath, width, height)
 		if err != nil {
@@ -849,7 +861,7 @@ func (m *model) preview() {
 			}
 		}
 	default:
-		m.previewContent, ok = generateFilePreview(filePath)
+		m.previewContent, ok = generateHexFilePreview(filePath)
 		if !ok {
 			m.previewContent = warning.Render("No preview available")
 		}
